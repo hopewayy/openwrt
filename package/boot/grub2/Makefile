@@ -34,6 +34,7 @@ define Package/grub2
   TITLE:=GRand Unified Bootloader
   URL:=http://www.gnu.org/software/grub/
   DEPENDS:=@TARGET_x86
+  VARIANT=pc
 endef
 
 define Package/grub2-editenv
@@ -43,11 +44,36 @@ define Package/grub2-editenv
   TITLE:=Grub2 Environment editor
   URL:=http://www.gnu.org/software/grub/
   DEPENDS:=@TARGET_x86
+  VARIANT=pc
 endef
 
 define Package/grub2-editenv/description
 	Edit grub2 environment files.
 endef
+
+define Package/grub2-efi
+  CATEGORY:=Boot Loaders
+  SECTION:=boot
+  TITLE:=GRand Unified Bootloader
+  URL:=http://www.gnu.org/software/grub/
+  DEPENDS:=@TARGET_x86
+  VARIANT=efi
+endef
+
+define Package/grub2-efi-editenv
+  CATEGORY:=Utilities
+  SECTION:=utils
+  SUBMENU:=Boot Loaders
+  TITLE:=Grub2 Environment editor
+  URL:=http://www.gnu.org/software/grub/
+  DEPENDS:=@TARGET_x86
+  VARIANT=efi
+endef
+
+define Package/grub2-efi-editenv/description
+	Edit grub2 environment files.
+endef
+
 
 HOST_BUILD_PREFIX := $(STAGING_DIR_HOST)
 
@@ -60,8 +86,15 @@ CONFIGURE_ARGS += \
 	--disable-nls \
 	--disable-device-mapper \
 	--disable-libzfs \
-	--disable-grub-mkfont \
-	--with-platform=none
+	--disable-grub-mkfont
+
+ifeq ($(BUILD_VARIANT),efi)
+  CONFIGURE_ARGS += --with-platform=efi
+endif
+
+ifeq ($(BUILD_VARIANT),pc)
+  CONFIGURE_ARGS +=--with-platform=none
+endif
 
 HOST_CONFIGURE_VARS += \
 	grub_build_mkfont_excuse="don't want fonts"
