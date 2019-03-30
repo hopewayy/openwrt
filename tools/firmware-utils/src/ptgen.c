@@ -300,7 +300,7 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 		if (kb_align == 0)
 			sect = round_to_cyl(sect);
 		gpte[i].end = cpu_to_le64(sect -1);
-		if (parts[i].type == 0xEF) {
+		if (parts[i].type == 0xEF || (i + 1) == active) {
 			gpte[i].type = GPT_PARTITION_ESP;
 			gpte[i].guid = guid;
 		} else {
