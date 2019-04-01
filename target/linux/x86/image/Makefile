@@ -19,14 +19,6 @@ GRUB_CONSOLE_CMDLINE =
 
 USE_ATKBD = generic 64
 
-ifneq ($(CONFIG_GRUB_EFI_IMAGES),)
-  GRUB2_MODULES += part_gpt
-endif
-
-ifneq ($(CONFIG_TARGET_ROOTFS_ISO),)
-  GRUB2_MODULES_EFI += iso9660
-endif
-
 ifneq ($(strip $(foreach subtarget,$(USE_ATKBD),$(CONFIG_TARGET_x86_$(subtarget)))),)
   GRUB2_MODULES += at_keyboard
   GRUB2_MODULES_ISO += at_keyboard
@@ -52,9 +44,9 @@ endif
 SIGNATURE:=$(shell perl -e 'printf("%08x", rand(0xFFFFFFFF))')
 ROOTPART:=$(call qstrip,$(CONFIG_TARGET_ROOTFS_PARTNAME))
 ROOTPART:=$(if $(ROOTPART),$(ROOTPART),PARTUUID=$(SIGNATURE)-02)
-PARTUUID:=$(strip $(shell uuidgen | sed 's/[a-zA-Z0-9]\{4\}$$/0002/' | tr '[a-z]' '[A-Z]'))
-ROOTPART2:=$(call qstrip,$(CONFIG_TARGET_ROOTFS_PARTNAME))
-ROOTPART2:=$(if $(ROOTPART2),$(ROOTPART2),PARTUUID=$(PARTUUID))
+EFI_SIGNATURE:=$(strip $(shell uuidgen | sed 's/[a-zA-Z0-9]\{2\}$$/00/' | tr '[a-z]' '[A-Z]'))
+EFI_ROOTPART:=$(call qstrip,$(CONFIG_TARGET_ROOTFS_PARTNAME))
+EFI_ROOTPART:=$(if $(EFI_ROOTPART),$(EFI_ROOTPART),PARTUUID=$(shell echo $(EFI_SIGNATURE) | sed 's/00$$/02/'))
 
 GRUB_TIMEOUT:=$(call qstrip,$(CONFIG_GRUB_TIMEOUT))
 GRUB_TITLE:=$(call qstrip,$(CONFIG_GRUB_TITLE))
@@ -105,16 +97,16 @@ ifneq ($(CONFIG_GRUB_IMAGES),)
   endef
 endif
 
-ifneq ($(CONFIG_GRUB_EFI_IMAGES),)
+ifneq ($(CONFIG_EFI_IMAGES),)
 
   BOOTOPTS:=$(call qstrip,$(CONFIG_GRUB_BOOTOPTS))
 
   define Image/cmdline/ext4/efi
-    root=$(ROOTPART2) rootfstype=ext4 rootwait
+    root=$(EFI_ROOTPART) rootfstype=ext4 rootwait
   endef
 
   define Image/cmdline/squashfs/efi
-    root=$(ROOTPART2) rootfstype=squashfs rootwait
+    root=$(EFI_ROOTPART) rootfstype=squashfs rootwait
   endef
 
   define Image/Build/grub2/efi
@@ -130,12 +122,13 @@ ifneq ($(CONFIG_GRUB_EFI_IMAGES),)
 		-O $(CONFIG_ARCH)-efi \
 		-c $(KDIR)/grub2/grub-early.cfg \
 		$(GRUB2_MODULES_EFI)
+
 	grub-mkimage \
 		-p /boot/grub \
 		-d $(STAGING_DIR_HOST)/lib/grub/i386-pc \
 		-o $(KDIR)/grub2/core.img \
 		-O i386-pc \
-		-c ./grub-early.cfg \
+		-c $(KDIR)/grub2/grub-early.cfg \
 		$(GRUB2_MODULES) part_gpt fat
 
 	$(CP) $(STAGING_DIR_HOST)/lib/grub/i386-pc/*.img $(KDIR)/grub2/
@@ -149,7 +142,7 @@ ifneq ($(CONFIG_GRUB_EFI_IMAGES),)
 		-e 's#msdos1#gpt1#g' \
 		./grub.cfg > $(KDIR)/root.grub/boot/grub/grub.cfg
 	-$(CP) $(STAGING_DIR_ROOT)/boot/. $(KDIR)/root.grub/boot/
-	PARTUUID=$(PARTUUID) PADDING="$(CONFIG_TARGET_IMAGES_PAD)" SIGNATURE="$(SIGNATURE)" PATH="$(TARGET_PATH)" $(SCRIPT_DIR)/gen_image_generic.sh \
+	EFI_SIGNATURE=$(EFI_SIGNATURE) PADDING="$(CONFIG_TARGET_IMAGES_PAD)" SIGNATURE="$(SIGNATURE)" PATH="$(TARGET_PATH)" $(SCRIPT_DIR)/gen_image_generic.sh \
 		$(BIN_DIR)/$(IMG_PREFIX)-combined-$(1)-efi.img \
 		$(CONFIG_TARGET_KERNEL_PARTSIZE) $(KDIR)/root.grub \
 		$(CONFIG_TARGET_ROOTFS_PARTSIZE) $(KDIR)/root.$(1) \
@@ -219,7 +212,7 @@ ifneq ($(CONFIG_GRUB_IMAGES),)
   endef
 endif
 
-ifneq ($(CONFIG_GRUB_EFI_IMAGES),)
+ifneq ($(CONFIG_EFI_IMAGES),)
   define Image/Build/vdi/efi
 	$(call Image/Build/vdi/default,$(1)-efi)
   endef
@@ -241,7 +234,7 @@ ifneq ($(CONFIG_GRUB_IMAGES),)
   endef
 endif
 
-ifneq ($(CONFIG_GRUB_EFI_IMAGES),)
+ifneq ($(CONFIG_EFI_IMAGES),)
   define Image/Build/vmdk/efi
 	$(call Image/Build/vmdk/default,$(1)-efi)
   endef
@@ -249,7 +242,7 @@ endif
 
 define Image/Build/gzip
 	$(if $(CONFIG_GRUB_IMAGES),gzip -f9n $(BIN_DIR)/$(IMG_PREFIX)-combined-$(1).img)
-	$(if $(CONFIG_GRUB_EFI_IMAGES),gzip -f9n $(BIN_DIR)/$(IMG_PREFIX)-combined-$(1)-efi.img)
+	$(if $(CONFIG_EFI_IMAGES),gzip -f9n $(BIN_DIR)/$(IMG_PREFIX)-combined-$(1)-efi.img)
 	gzip -f9n $(BIN_DIR)/$(IMG_PREFIX)-rootfs-$(1).img
 endef
 
