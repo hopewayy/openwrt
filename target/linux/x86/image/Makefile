@@ -130,11 +130,16 @@ ifneq ($(CONFIG_GRUB_EFI_IMAGES),)
 		-O $(CONFIG_ARCH)-efi \
 		-c $(KDIR)/grub2/grub-early.cfg \
 		$(GRUB2_MODULES_EFI)
+	grub-mkimage \
+		-p /boot/grub \
+		-d $(STAGING_DIR_HOST)/lib/grub/i386-pc \
+		-o $(KDIR)/grub2/core.img \
+		-O i386-pc \
+		-c ./grub-early.cfg \
+		$(GRUB2_MODULES) part_gpt fat
 
-  ifneq ($(CONFIG_GRUB_IMAGES),)
 	$(CP) $(STAGING_DIR_HOST)/lib/grub/i386-pc/*.img $(KDIR)/grub2/
 	echo '(hd0) $(BIN_DIR)/$(IMG_PREFIX)-combined-$(1)-efi.img' > $(KDIR)/grub2/device.map
-  endif
 	sed \
 		-e 's#@SERIAL_CONFIG@#$(strip $(GRUB_SERIAL_CONFIG))#g' \
 		-e 's#@TERMINAL_CONFIG@#$(strip $(GRUB_TERMINAL_CONFIG))#g' \
@@ -149,13 +154,11 @@ ifneq ($(CONFIG_GRUB_EFI_IMAGES),)
 		$(CONFIG_TARGET_KERNEL_PARTSIZE) $(KDIR)/root.grub \
 		$(CONFIG_TARGET_ROOTFS_PARTSIZE) $(KDIR)/root.$(1) \
 		256
-  ifneq ($(CONFIG_GRUB_IMAGES),)
 	grub-bios-setup \
 		--device-map="$(KDIR)/grub2/device.map" \
 		-d "$(KDIR)/grub2" \
 		-r "hd0,gpt1" \
 		"$(BIN_DIR)/$(IMG_PREFIX)-combined-$(1)-efi.img"
-  endif
   endef
 endif
 
@@ -164,7 +167,7 @@ define Image/Build/squashfs
 endef
 
 define Image/Build/iso
-	$(INSTALL_DIR) $(KDIR)/root.grub/boot/grub $(KDIR)/grub2
+	$(INSTALL_DIR) $(KDIR)/root.grub/boot/grub $(KDIR)/grub2 $(KDIR)/root.grub/efi/boot
 	$(CP) $(KDIR)/bzImage $(KDIR)/root.grub/boot/vmlinuz
 	grub-mkimage \
 		-p /boot/grub \
@@ -177,6 +180,17 @@ define Image/Build/iso
 		$(STAGING_DIR_HOST)/lib/grub/i386-pc/cdboot.img \
 		$(KDIR)/grub2/eltorito.img \
 		> $(KDIR)/root.grub/boot/grub/eltorito.img
+	grub-mkimage \
+		-p /boot/grub \
+		-d $(STAGING_DIR_HOST)/lib/grub/$(CONFIG_ARCH)-efi \
+		-o $(KDIR)/root.grub/efi/boot/boot$(if $(CONFIG_x86_64),x64,x86).efi \
+		-O $(CONFIG_ARCH)-efi \
+		-c ./grub-early.cfg \
+		$(GRUB2_MODULES_EFI)
+
+	rm -f $(KDIR)/root.grub/efiboot.img
+	mkfs.fat -C $(TARGET_DIR)/efiboot.img -S 512 1440
+	mcopy -s -i $(TARGET_DIR)/efiboot.img $(KDIR)/root.grub/efi ::/
 	sed \
 		-e 's#@SERIAL_CONFIG@#$(strip $(GRUB_SERIAL_CONFIG))#g' \
 		-e 's#@TERMINAL_CONFIG@#$(strip $(GRUB_TERMINAL_CONFIG))#g' \
@@ -186,6 +200,7 @@ define Image/Build/iso
 		./grub-iso.cfg > $(KDIR)/root.grub/boot/grub/grub.cfg
 	-$(CP) $(STAGING_DIR_ROOT)/boot/. $(KDIR)/root.grub/boot/
 	mkisofs -R -b boot/grub/eltorito.img -no-emul-boot -boot-info-table \
+		-boot-load-size 4 -c boot.cat -eltorito-alt-boot -e efiboot.img -no-emul-boot \
 		-o $(KDIR)/root.iso $(KDIR)/root.grub $(TARGET_DIR)
 endef
 
