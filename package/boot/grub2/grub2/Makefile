@@ -1,6 +1,6 @@
-GRUB2_PLATFORM:=pc
+GRUB_PLATFORM:=pc
 
-PKG_BUILD_DEPENDS:=grub2/host grub2-efi/host
+PKG_BUILD_DEPENDS:=grub2/host
 include ../common.mk
 
 define Package/grub2

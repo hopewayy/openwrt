@@ -26,7 +26,7 @@ PKG_FLAGS:=nonshared
 
 PATCH_DIR:=../patches
 
-HOST_BUILD_DIR ?= $(BUILD_DIR_HOST)/$(PKG_NAME)-$(GRUB2_PLATFORM)/$(PKG_NAME)$(if $(PKG_VERSION),-$(PKG_VERSION))
+HOST_BUILD_DIR ?= $(BUILD_DIR_HOST)/$(PKG_NAME)-$(GRUB_PLATFORM)/$(PKG_NAME)$(if $(PKG_VERSION),-$(PKG_VERSION))
 HOST_BUILD_PREFIX := $(STAGING_DIR_HOST)
 
 include $(INCLUDE_DIR)/host-build.mk
@@ -43,7 +43,7 @@ HOST_CONFIGURE_ARGS += \
 	--disable-werror \
 	--disable-libzfs \
 	--disable-nls \
-	--with-platform=$(GRUB2_PLATFORM)
+	--with-platform=$(GRUB_PLATFORM)
 
 HOST_MAKE_FLAGS += \
 	TARGET_RANLIB=$(TARGET_RANLIB) \
