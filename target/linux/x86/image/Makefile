@@ -179,7 +179,7 @@ define Image/Build/iso
 		-o $(KDIR)/root.grub/efi/boot/boot$(if $(CONFIG_x86_64),x64,ia32).efi \
 		-O $(CONFIG_ARCH)-efi \
 		-c ./grub-early.cfg \
-		$(GRUB2_MODULES_EFI)
+		$(GRUB2_MODULES_EFI) iso9660
 
 	rm -f $(KDIR)/root.grub/efiboot.img
 	mkfs.fat -C $(TARGET_DIR)/efiboot.img -S 512 1440
