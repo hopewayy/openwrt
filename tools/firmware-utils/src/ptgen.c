@@ -402,7 +402,8 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 		goto fail;
 	}
 
-	/* The second partition table */
+#if 0
+	/* The alternate partition table (We omit it) */
 	sect = gpth.self;
 	gpth.self = gpth.alternate;
 	gpth.alternate = sect;
@@ -427,6 +428,7 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 		fprintf(stderr, "write failed.\n");
 		goto fail;
 	}
+#endif
 
 	ret = 0;
 fail:
