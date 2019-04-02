@@ -44,7 +44,7 @@ endif
 SIGNATURE:=$(shell perl -e 'printf("%08x", rand(0xFFFFFFFF))')
 ROOTPART:=$(call qstrip,$(CONFIG_TARGET_ROOTFS_PARTNAME))
 ROOTPART:=$(if $(ROOTPART),$(ROOTPART),PARTUUID=$(SIGNATURE)-02)
-EFI_SIGNATURE:=$(strip $(shell uuidgen | sed 's/[a-zA-Z0-9]\{2\}$$/00/' | tr '[a-z]' '[A-Z]'))
+EFI_SIGNATURE:=$(strip $(shell uuidgen | sed 's/[a-zA-Z0-9]\{2\}$$/00/'))
 EFI_ROOTPART:=$(call qstrip,$(CONFIG_TARGET_ROOTFS_PARTNAME))
 EFI_ROOTPART:=$(if $(EFI_ROOTPART),$(EFI_ROOTPART),PARTUUID=$(shell echo $(EFI_SIGNATURE) | sed 's/00$$/02/'))
 
