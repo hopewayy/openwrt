@@ -118,7 +118,7 @@ ifneq ($(CONFIG_EFI_IMAGES),)
 	grub-mkimage \
 		-p /boot/grub \
 		-d $(STAGING_DIR_HOST)/lib/grub/$(CONFIG_ARCH)-efi \
-		-o $(KDIR)/root.grub/efi/boot/boot$(if $(CONFIG_x86_64),x64,x86).efi \
+		-o $(KDIR)/root.grub/efi/boot/boot$(if $(CONFIG_x86_64),x64,ia32).efi \
 		-O $(CONFIG_ARCH)-efi \
 		-c $(KDIR)/grub2/grub-early.cfg \
 		$(GRUB2_MODULES_EFI)
@@ -176,7 +176,7 @@ define Image/Build/iso
 	grub-mkimage \
 		-p /boot/grub \
 		-d $(STAGING_DIR_HOST)/lib/grub/$(CONFIG_ARCH)-efi \
-		-o $(KDIR)/root.grub/efi/boot/boot$(if $(CONFIG_x86_64),x64,x86).efi \
+		-o $(KDIR)/root.grub/efi/boot/boot$(if $(CONFIG_x86_64),x64,ia32).efi \
 		-O $(CONFIG_ARCH)-efi \
 		-c ./grub-early.cfg \
 		$(GRUB2_MODULES_EFI)
