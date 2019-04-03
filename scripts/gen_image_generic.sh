@@ -31,6 +31,7 @@ ROOTFSSIZE="$(($4 / 512))"
 dd if="$ROOTFSIMAGE" of="$OUTPUT" bs=512 seek="$ROOTFSOFFSET" conv=notrunc
 
 if [ -n "$EFI_SIGNATURE" ]; then
+    [ -n "$PADDING" ] && dd if=/dev/zero of="$OUTPUT" bs=512 seek="$(($ROOTFSOFFSET + $ROOTFSSIZE))" conv=notrunc count="$sect"
     mkfs.fat -C "$OUTPUT.kernel" -S 512 "$(($KERNELSIZE / 1024))"
     mcopy -s -i "$OUTPUT.kernel" "$KERNELDIR"/* ::/
 else
