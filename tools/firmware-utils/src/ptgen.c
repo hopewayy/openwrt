@@ -35,14 +35,19 @@
 #include "cyg_crc.h"
 
 #if __BYTE_ORDER == __BIG_ENDIAN
-#define cpu_to_le32(x) __bswap_32(x)
-#define cpu_to_le64(x) __bswap_64(x)
+#define cpu_to_le16(x) bswap_16(x)
+#define cpu_to_le32(x) bswap_32(x)
+#define cpu_to_le64(x) bswap_64(x)
 #elif __BYTE_ORDER == __LITTLE_ENDIAN
+#define cpu_to_le16(x) (x)
 #define cpu_to_le32(x) (x)
 #define cpu_to_le64(x) (x)
 #else
 #error unknown endianness!
 #endif
+
+#define swap(a, b) \
+	do { typeof(a) __tmp = (a); (a) = (b); (b) = __tmp; } while (0)
 
 #ifndef GUID_INIT
 typedef uuid_le guid_t;
@@ -53,21 +58,21 @@ typedef uuid_le guid_t;
 #define GPT_SIGNATURE 0x5452415020494645ULL
 #define GPT_REVISION 0x00010000
 
-#define GPT_PARTITION_ESP \
+#define GUID_PARTITION_SYSTEM \
 	GUID_INIT( 0xC12A7328, 0xF81F, 0x11d2, \
 			0xBA, 0x4B, 0x00, 0xA0, 0xC9, 0x3E, 0xC9, 0x3B)
 
-#define GPT_PARTITION_DATA \
+#define GUID_PARTITION_BASIC_DATA \
 	GUID_INIT( 0xEBD0A0A2, 0xB9E5, 0x4433, \
 			0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7)
 
-#define GPT_PARTITION_BIOS \
+#define GUID_PARTITION_BIOS_BOOT \
 	GUID_INIT( 0x21686148, 0x6449, 0x6E6F, \
 			0x74, 0x4E, 0x65, 0x65, 0x64, 0x45, 0x46, 0x49)
 
 #define GPT_HEADER_SIZE         92
 #define GPT_ENTRY_SIZE          128
-#define GPT_ENTRY_NUM           128
+#define GPT_ENTRY_MAX           128
 
 
 /* Partition table entry */
@@ -121,7 +126,7 @@ int sectors = -1;
 int kb_align = 0;
 bool ignore_null_sized_partition = false;
 bool use_guid_partition_table = false;
-struct partinfo parts[GPT_ENTRY_NUM];
+struct partinfo parts[GPT_ENTRY_MAX];
 char *filename = NULL;
 
 
@@ -215,21 +220,32 @@ static inline int guid_parse(char *buf, guid_t *guid)
 		guid->b[i] = strtol(b, 0, 16);
 		p += 2;
 	}
-	*((uint32_t *)guid->b) = __bswap_32(*((uint32_t *)guid->b));
-	*((uint16_t *)(guid->b+4)) = __bswap_16(*((uint16_t *)(guid->b+4)));
-	*((uint16_t *)(guid->b+6)) = __bswap_16(*((uint16_t *)(guid->b+6)));
+	swap(guid->b[0], guid->b[3]);
+	swap(guid->b[1], guid->b[2]);
+	swap(guid->b[4], guid->b[5]);
+	swap(guid->b[6], guid->b[7]);
 	return 0;
 }
 
-/* print a guid_t struct  */
-static inline void guid_print(guid_t *guid)
+/* init an utf-16 string from utf-8 string */
+static inline void init_utf16(char *str, uint16_t *buf, int bufsize)
 {
-	printf("%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X\n",
-			guid->b[3],  guid->b[2],  guid->b[1],  guid->b[0],
-			guid->b[5],  guid->b[4],  guid->b[7],  guid->b[6],
-			guid->b[8],  guid->b[9],  guid->b[10], guid->b[11],
-			guid->b[12], guid->b[13], guid->b[14], guid->b[15]
-			);
+	int i, n = 0;
+	for (i = 0; i < bufsize; i++) {
+		if (str[n] == 0x00) {
+			buf[i] = 0x00;
+			return ;
+		} else if((str[n] & 0x80) == 0x00) {//0xxxxxxx
+			buf[i] = cpu_to_le16(str[n++]);
+		} else if((str[n] & 0xE0) == 0xC0) {//110xxxxx
+			buf[i] = cpu_to_le16((str[n++] & 0x1F) << 6 | str[n++] & 0x3F);
+		} else if((str[n] & 0xF0) == 0xE0) {//1110xxxx
+			buf[i] = cpu_to_le16((str[n++] & 0x0F) << 12 | (str[n++] & 0x3F) << 6 | str[n++] & 0x3F);
+		} else {
+			buf[i] = cpu_to_le16('?');
+			n ++;
+		}
+	}
 }
 
 /* check the partition sizes and write the partition table */
@@ -303,21 +319,21 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 {
 	struct pte pte;
 	struct gpth gpth = {
-		.signature = GPT_SIGNATURE,
-		.revision = GPT_REVISION,
+		.signature = cpu_to_le64(GPT_SIGNATURE),
+		.revision = cpu_to_le32(GPT_REVISION),
 		.size = cpu_to_le32(GPT_HEADER_SIZE),
 		.self = cpu_to_le64(1),
-		.first_usable = cpu_to_le64(GPT_ENTRY_SIZE * GPT_ENTRY_NUM / 512 + 2),
+		.first_usable = cpu_to_le64(GPT_ENTRY_SIZE * GPT_ENTRY_MAX / 512 + 2),
 		.first_entry = cpu_to_le64(2),
 		.disk_guid = guid,
-		.entry_num = cpu_to_le32(GPT_ENTRY_NUM),
+		.entry_num = cpu_to_le32(GPT_ENTRY_MAX),
 		.entry_size = cpu_to_le32(GPT_ENTRY_SIZE),
 	};
-	struct gpte  gpte[GPT_ENTRY_NUM];
+	struct gpte  gpte[GPT_ENTRY_MAX];
 	unsigned long long start, end, sect = 0;
 	int i, fd, ret = -1;
 
-	memset(gpte, 0, GPT_ENTRY_SIZE * GPT_ENTRY_NUM);
+	memset(gpte, 0, GPT_ENTRY_SIZE * GPT_ENTRY_MAX);
 	for (i = 0; i < nr; i++) {
 		if (!parts[i].size) {
 			if (ignore_null_sized_partition)
@@ -337,9 +353,10 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 		gpte[i].guid = guid;
 		gpte[i].guid.b[15] += i + 1;
 		if (parts[i].type == 0xEF || (i + 1) == active) {
-			gpte[i].type = GPT_PARTITION_ESP;
+			gpte[i].type = GUID_PARTITION_SYSTEM;
+			init_utf16("EFI System Partition", gpte[i].name, 36) ;
 		} else {
-			gpte[i].type = GPT_PARTITION_DATA;
+			gpte[i].type = GUID_PARTITION_BASIC_DATA;
 		}
 
 		if (verbose)
@@ -348,11 +365,11 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 		printf("%lld\n", (sect - start) * 512);
 	}
 
-	gpte[GPT_ENTRY_NUM - 1].start = cpu_to_le64(GPT_ENTRY_SIZE * GPT_ENTRY_NUM / 512 + 2);
-	gpte[GPT_ENTRY_NUM - 1].end = cpu_to_le64((kb_align ? round_to_kb(sectors) : sectors) - 1);
-	gpte[GPT_ENTRY_NUM - 1].type = GPT_PARTITION_BIOS;
-	gpte[GPT_ENTRY_NUM - 1].guid = guid;
-	gpte[GPT_ENTRY_NUM - 1].guid.b[15] += GPT_ENTRY_NUM;
+	gpte[GPT_ENTRY_MAX - 1].start = cpu_to_le64(GPT_ENTRY_SIZE * GPT_ENTRY_MAX / 512 + 2);
+	gpte[GPT_ENTRY_MAX - 1].end = cpu_to_le64((kb_align ? round_to_kb(sectors) : sectors) - 1);
+	gpte[GPT_ENTRY_MAX - 1].type = GUID_PARTITION_BIOS_BOOT;
+	gpte[GPT_ENTRY_MAX - 1].guid = guid;
+	gpte[GPT_ENTRY_MAX - 1].guid.b[15] += GPT_ENTRY_MAX;
 
 	end = sect + sectors - 1;
 
@@ -362,10 +379,10 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 	to_chs(1, pte.chs_start);
 	to_chs(end, pte.chs_end);
 
-	gpth.last_usable = cpu_to_le64(end - GPT_ENTRY_SIZE * GPT_ENTRY_NUM / 512 - 1);
+	gpth.last_usable = cpu_to_le64(end - GPT_ENTRY_SIZE * GPT_ENTRY_MAX / 512 - 1);
 	gpth.alternate = cpu_to_le64(end);
-	gpth.entry_crc32 = gpt_crc32(gpte, GPT_ENTRY_SIZE * GPT_ENTRY_NUM);
-	gpth.crc32 = gpt_crc32((char *)&gpth, GPT_HEADER_SIZE);
+	gpth.entry_crc32 = cpu_to_le32(gpt_crc32(gpte, GPT_ENTRY_SIZE * GPT_ENTRY_MAX));
+	gpth.crc32 = cpu_to_le32(gpt_crc32((char *)&gpth, GPT_HEADER_SIZE));
 
 	if ((fd = open(filename, O_WRONLY|O_CREAT|O_TRUNC, 0644)) < 0) {
 		fprintf(stderr, "Can't open output file '%s'\n",filename);
@@ -397,22 +414,20 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 	}
 
 	lseek(fd, 1024, SEEK_SET);
-	if (write(fd, &gpte, GPT_ENTRY_SIZE * GPT_ENTRY_NUM) != GPT_ENTRY_SIZE * GPT_ENTRY_NUM) {
+	if (write(fd, &gpte, GPT_ENTRY_SIZE * GPT_ENTRY_MAX) != GPT_ENTRY_SIZE * GPT_ENTRY_MAX) {
 		fprintf(stderr, "write failed.\n");
 		goto fail;
 	}
 
 #if 0
 	/* The alternate partition table (We omit it) */
-	sect = gpth.self;
-	gpth.self = gpth.alternate;
-	gpth.alternate = sect;
-	gpth.first_entry = cpu_to_le64(end - GPT_ENTRY_SIZE * GPT_ENTRY_NUM / 512),
+	swap(gpth.self, gpth.alternate);
+	gpth.first_entry = cpu_to_le64(end - GPT_ENTRY_SIZE * GPT_ENTRY_MAX / 512),
 	gpth.crc32 = 0;
-	gpth.crc32 = gpt_crc32(&gpth, GPT_HEADER_SIZE);
+	gpth.crc32 = cpu_to_le32(gpt_crc32(&gpth, GPT_HEADER_SIZE));
 
-	lseek(fd, end * 512 - GPT_ENTRY_SIZE * GPT_ENTRY_NUM, SEEK_SET);
-	if (write(fd, &gpte, GPT_ENTRY_SIZE * GPT_ENTRY_NUM) != GPT_ENTRY_SIZE * GPT_ENTRY_NUM) {
+	lseek(fd, end * 512 - GPT_ENTRY_SIZE * GPT_ENTRY_MAX, SEEK_SET);
+	if (write(fd, &gpte, GPT_ENTRY_SIZE * GPT_ENTRY_MAX) != GPT_ENTRY_SIZE * GPT_ENTRY_MAX) {
 		fprintf(stderr, "write failed.\n");
 		goto fail;
 	}
@@ -422,7 +437,6 @@ static int gen_gptable(uint32_t signature, guid_t guid, int nr)
 		fprintf(stderr, "write failed.\n");
 		goto fail;
 	}
-
 	lseek(fd, end * 512 + 511, SEEK_SET);
 	if (write(fd, "\x00", 1) != 1) {
 		fprintf(stderr, "write failed.\n");
@@ -435,8 +449,6 @@ fail:
 	close(fd);
 	return ret;
 }
-
-
 
 static void usage(char *prog)
 {
@@ -474,7 +486,7 @@ int main (int argc, char **argv)
 			sectors = (int)strtoul(optarg, NULL, 0);
 			break;
 		case 'p':
-			if (part > GPT_ENTRY_NUM - 1 || (use_guid_partition_table == false && part > 3)) {
+			if (part > GPT_ENTRY_MAX - 1 || (use_guid_partition_table == false && part > 3)) {
 				fprintf(stderr, "Too many partitions\n");
 				exit(EXIT_FAILURE);
 			}
@@ -500,7 +512,6 @@ int main (int argc, char **argv)
 				fprintf(stderr, "Invalid guid string\n");
 				exit(EXIT_FAILURE);
 			}
-			//guid_print(&guid);
 			break;
 		case '?':
 		default:
