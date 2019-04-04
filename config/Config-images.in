@@ -246,13 +246,15 @@ menu "Target Images"
 
 	config VDI_IMAGES
 		bool "Build VirtualBox image files (VDI)"
-		depends on TARGET_x86 && GRUB_IMAGES || EFI_IMAGES
+		select GRUB_IMAGES
+		depends on TARGET_x86
 		select TARGET_IMAGES_PAD
 		select PACKAGE_kmod-e1000
 
 	config VMDK_IMAGES
 		bool "Build VMware image files (VMDK)"
-		depends on TARGET_x86 && GRUB_IMAGES || EFI_IMAGES
+		select GRUB_IMAGES
+		depends on TARGET_x86
 		select TARGET_IMAGES_PAD
 		select PACKAGE_kmod-e1000
 
